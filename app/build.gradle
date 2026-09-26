@@ -1,0 +1,40 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.michaelactions.webtabs'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.michaelactions.webtabs"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    signingConfigs {
+        release {
+            storeFile file('../keystore.p12')
+            storeType 'PKCS12'
+            storePassword 'webtabs123'
+            keyAlias 'webtabs'
+            keyPassword 'webtabs123'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint { abortOnError false }
+}
+
+dependencies { }
