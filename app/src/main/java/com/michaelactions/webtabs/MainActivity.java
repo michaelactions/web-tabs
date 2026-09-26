@@ -31,6 +31,14 @@ import java.util.List;
  */
 public class MainActivity extends Activity {
 
+    /** 内置默认标签：装好就自带，升级/重装都不会丢 */
+    private static final String[][] DEFAULTS = {
+            {"工具站", "https://tools.office3.pp.ua/"},
+            {"节点切换", "https://tools.office3.pp.ua/failover/"},
+            {"状态监控", "https://status.digac.icu/"},
+            {"华住会看板", "https://huazhu.office3.pp.ua/"}
+    };
+
     private List<Store.Site> sites;
     private GridView grid;
     private TextView empty;
@@ -44,14 +52,8 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
+        ensureDefaults();
         sites = Store.load(this);
-        if (sites.isEmpty()) {
-            sites.add(new Store.Site("工具站", "https://tools.office3.pp.ua/"));
-            sites.add(new Store.Site("节点切换", "https://tools.office3.pp.ua/failover/"));
-            sites.add(new Store.Site("状态监控", "https://status.digac.icu/"));
-            sites.add(new Store.Site("华住会看板", "https://huazhu.office3.pp.ua/"));
-            Store.save(this, sites);
-        }
 
         grid = (GridView) findViewById(R.id.grid);
         empty = (TextView) findViewById(R.id.empty);
@@ -70,6 +72,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        ensureDefaults();
         sites = Store.load(this);
         adapter.notifyDataSetChanged();
         refreshEmpty();
@@ -165,8 +168,10 @@ public class MainActivity extends Activity {
                 .setTitle("删除标签")
                 .setMessage("确定删除「" + sites.get(idx).name + "」？")
                 .setPositiveButton("删除", (d, w) -> {
+                    final String delUrl = sites.get(idx).url;
                     Store.iconFile(MainActivity.this, sites.get(idx)).delete();
                     sites.remove(idx);
+                    markDefaultRemoved(delUrl);
                     Store.save(MainActivity.this, sites);
                     sites = Store.load(MainActivity.this);
                     adapter.notifyDataSetChanged();
@@ -186,7 +191,8 @@ public class MainActivity extends Activity {
                 "全屏沉浸：" + (p.getBoolean("fullscreen", false) ? "开" : "关"),
                 "桌面版网页：" + (p.getBoolean("desktopUA", false) ? "开" : "关"),
                 "自动刷新：" + p.getInt("refreshSec", 0) + " 秒（0=不刷新）",
-                "重新抓取全部图标"
+                "重新抓取全部图标",
+                "恢复默认标签（补齐内置站点）"
         };
         new AlertDialog.Builder(this)
                 .setTitle("设置")
@@ -197,7 +203,8 @@ public class MainActivity extends Activity {
                     else if (w == 3) p.edit().putBoolean("desktopUA", !p.getBoolean("desktopUA", false)).apply();
                     else if (w == 4) askRefresh();
                     else if (w == 5) { clearIcons(); fetchMissingIcons(); }
-                    if (w != 5) settings();
+                    else if (w == 6) { restoreDefaults(); return; }
+                    settings();
                 })
                 .setNegativeButton("关闭", null)
                 .show();
@@ -264,6 +271,54 @@ public class MainActivity extends Activity {
                 if (toastResult) toast(b != null ? "图标已更新" : "没抓到图标，已用字母代替");
             });
         }).start();
+    }
+
+    // ---------- 内置默认标签 ----------
+
+    /** 把内置默认标签补齐（用户手动删掉的不会再加回来） */
+    private void ensureDefaults() {
+        android.content.SharedPreferences p = Store.prefs(this);
+        String removed = p.getString("removedDefaults", "|");
+        List<Store.Site> list = Store.load(this);
+        boolean changed = false;
+        for (String[] d : DEFAULTS) {
+            if (removed.contains("|" + d[1] + "|")) continue;
+            boolean found = false;
+            for (Store.Site s : list) {
+                if (s.url != null && s.url.equalsIgnoreCase(d[1])) { found = true; break; }
+            }
+            if (!found) {
+                list.add(new Store.Site(d[0], d[1]));
+                changed = true;
+            }
+        }
+        if (changed) Store.save(this, list);
+    }
+
+    private boolean isDefault(String url) {
+        for (String[] d : DEFAULTS) if (d[1].equalsIgnoreCase(url)) return true;
+        return false;
+    }
+
+    /** 记下"用户主动删掉的默认站"，避免下次又冒出来 */
+    private void markDefaultRemoved(String url) {
+        if (!isDefault(url)) return;
+        android.content.SharedPreferences p = Store.prefs(this);
+        String removed = p.getString("removedDefaults", "|");
+        if (!removed.contains("|" + url + "|")) {
+            p.edit().putString("removedDefaults", removed + url + "|").apply();
+        }
+    }
+
+    /** 恢复默认标签：清掉删除记录并补齐 */
+    private void restoreDefaults() {
+        Store.prefs(this).edit().putString("removedDefaults", "|").apply();
+        ensureDefaults();
+        sites = Store.load(this);
+        adapter.notifyDataSetChanged();
+        refreshEmpty();
+        fetchMissingIcons();
+        toast("默认标签已恢复");
     }
 
     private void toast(String m) { Toast.makeText(this, m, Toast.LENGTH_SHORT).show(); }
