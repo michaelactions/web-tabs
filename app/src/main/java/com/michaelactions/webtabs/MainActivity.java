@@ -47,6 +47,8 @@ public class MainActivity extends Activity {
         sites = Store.load(this);
         if (sites.isEmpty()) {
             sites.add(new Store.Site("工具站", "https://tools.office3.pp.ua/"));
+            sites.add(new Store.Site("节点切换", "https://tools.office3.pp.ua/failover/"));
+            sites.add(new Store.Site("状态监控", "https://status.digac.icu/"));
             sites.add(new Store.Site("华住会看板", "https://huazhu.office3.pp.ua/"));
             Store.save(this, sites);
         }
