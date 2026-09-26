@@ -1,36 +1,76 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#FFFFFFFF"
-    android:keepScreenOn="true">
+    android:background="#FFFFFF">
 
-    <HorizontalScrollView
-        android:id="@+id/tabBarScroll"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#FFF2F4F7"
-        android:scrollbars="none">
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#F9FAFB"
+        android:paddingLeft="16dp"
+        android:paddingRight="8dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
 
-        <LinearLayout
-            android:id="@+id/tabBar"
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="标签浏览器"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="#101828" />
+
+        <Button
+            android:id="@+id/btnAdd"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:padding="4dp" />
-    </HorizontalScrollView>
+            android:text="＋ 添加"
+            android:textSize="14sp"
+            android:minWidth="0dp"
+            android:paddingLeft="16dp"
+            android:paddingRight="16dp" />
 
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="#FFDDE1E6" />
+        <Button
+            android:id="@+id/btnSettings"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="设置"
+            android:textSize="14sp"
+            android:minWidth="0dp"
+            android:paddingLeft="16dp"
+            android:paddingRight="16dp" />
+    </LinearLayout>
 
     <FrameLayout
-        android:id="@+id/webContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_weight="1">
+
+        <GridView
+            android:id="@+id/grid"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:numColumns="3"
+            android:horizontalSpacing="6dp"
+            android:verticalSpacing="6dp"
+            android:padding="10dp"
+            android:listSelector="@android:color/transparent" />
+
+        <TextView
+            android:id="@+id/empty"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="还没有标签\n点右上角「＋ 添加」配置你的网页"
+            android:textSize="15sp"
+            android:gravity="center"
+            android:textColor="#667085"
+            android:visibility="gone" />
+    </FrameLayout>
 </LinearLayout>
