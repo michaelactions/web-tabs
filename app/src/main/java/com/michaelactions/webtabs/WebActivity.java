@@ -154,19 +154,18 @@ public class WebActivity extends Activity {
         if (Store.prefs(this).getBoolean("desktopUA", false)) {
             s.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36");
         }
-        w.setWebViewClient(new WebViewClient() {
+        w.setWebViewClient(new WebViewClient());
+        w.setWebChromeClient(new WebChromeClient() {
+            @Override public void onProgressChanged(WebView view, int p) {
+                progress.setProgress(p);
+                progress.setVisibility(p < 100 ? View.VISIBLE : View.GONE);
+            }
             @Override public void onReceivedIcon(WebView view, Bitmap icon) {
                 if (icon != null) {
                     for (Tab t : tabs) {
                         if (t.web == view) { Store.saveIcon(WebActivity.this, t.site, icon); break; }
                     }
                 }
-            }
-        });
-        w.setWebChromeClient(new WebChromeClient() {
-            @Override public void onProgressChanged(WebView view, int p) {
-                progress.setProgress(p);
-                progress.setVisibility(p < 100 ? View.VISIBLE : View.GONE);
             }
         });
         w.setDownloadListener(new DownloadListener() {
