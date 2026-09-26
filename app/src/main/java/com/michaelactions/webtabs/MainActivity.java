@@ -54,6 +54,7 @@ public class MainActivity extends Activity {
 
         ensureDefaults();
         sites = Store.load(this);
+        Store.seedBundledIcons(this, sites);   // 内置图标落地（不联网），首屏立刻有图标
 
         grid = (GridView) findViewById(R.id.grid);
         empty = (TextView) findViewById(R.id.empty);
@@ -238,23 +239,32 @@ public class MainActivity extends Activity {
 
     // ---------- 图标抓取 ----------
 
+    /** 图标同步：优先用 App 内置图标（不联网）；只有网站那边图标变了、或本地完全没有，才联网取 */
     private void fetchMissingIcons() {
         if (fetching) return;
         fetching = true;
         new Thread(() -> {
-            boolean any = false;
-            for (final Store.Site s : Store.load(MainActivity.this)) {
-                if (Store.loadIcon(MainActivity.this, s) != null) continue;
-                final Bitmap b = Store.fetchIcon(s);
-                if (b != null) {
-                    Store.saveIcon(MainActivity.this, s, b);
-                    any = true;
+            boolean changed = false;
+            List<Store.Site> list = Store.load(MainActivity.this);
+            Store.seedBundledIcons(MainActivity.this, list);
+            for (final Store.Site s : list) {
+                if (!Store.hasIcon(MainActivity.this, s)) {
+                    // 本地完全没有图标（一般是用户自己加的站）：先抓一次
+                    final Bitmap b = Store.fetchIcon(s);
+                    if (b != null) {
+                        Store.saveIcon(MainActivity.this, s, b);
+                        Store.setChecked(MainActivity.this, s, System.currentTimeMillis());
+                        changed = true;
+                    }
+                    continue;
                 }
+                if (!Store.needCheck(MainActivity.this, s)) continue;   // 12 小时内查过就不再去动它
+                if (Store.checkRemoteChanged(MainActivity.this, s)) changed = true;
             }
-            final boolean changed = any;
+            final boolean done = changed;
             ui.post(() -> {
                 fetching = false;
-                if (changed) adapter.notifyDataSetChanged();
+                if (done) adapter.notifyDataSetChanged();
             });
         }).start();
     }

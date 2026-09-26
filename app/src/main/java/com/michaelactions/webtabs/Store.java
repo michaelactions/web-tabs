@@ -13,6 +13,7 @@ import android.graphics.Typeface;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -23,10 +24,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 站点（标签）数据与图标的本地存储/抓取。
- * 列表存在 SharedPreferences，图标 PNG 存在 filesDir/icons 下。
+ * 站点（标签）数据与图标的本地存储。
+ * 默认站点的图标已随 App 打包（assets/icons/<urlKey>.png），不联网即可显示；
+ * 只有当网站那边的图标真的变了，才会联网取回新图标替换。
  */
 public class Store {
+
+    /** 联网检查网站图标是否变化的间隔（默认 12 小时） */
+    public static final long ICON_CHECK_INTERVAL_MS = 12L * 60 * 60 * 1000;
 
     public static class Site {
         public String name = "";
@@ -91,9 +96,9 @@ public class Store {
         prefs(c).edit().putString("sites", arr.toString()).apply();
     }
 
-    // ---------- 图标 ----------
+    // ---------- 图标文件 ----------
 
-    private static String key(String s) {
+    public static String key(String s) {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] d = md.digest(s.getBytes("UTF-8"));
@@ -105,10 +110,14 @@ public class Store {
         }
     }
 
-    public static File iconFile(Context c, Site s) {
+    public static File iconDir(Context c) {
         File dir = new File(c.getFilesDir(), "icons");
         if (!dir.exists()) dir.mkdirs();
-        return new File(dir, key(s.url) + ".png");
+        return dir;
+    }
+
+    public static File iconFile(Context c, Site s) {
+        return new File(iconDir(c), key(s.url) + ".png");
     }
 
     public static Bitmap loadIcon(Context c, Site s) {
@@ -121,14 +130,155 @@ public class Store {
 
     public static void saveIcon(Context c, Site s, Bitmap bmp) {
         try {
-            File f = iconFile(c, s);
-            FileOutputStream fos = new FileOutputStream(f);
+            FileOutputStream fos = new FileOutputStream(iconFile(c, s));
             bmp.compress(Bitmap.CompressFormat.PNG, 100, fos);
             fos.close();
         } catch (Exception ignored) { }
     }
 
-    /** 生成字母头像（首字母 + 固定颜色），保证列表里不会空着 */
+    /**
+     * 首次运行：把 App 内置的图标（assets/icons/<key>.png）落到本地缓存。
+     * 这样默认站点一打开就有图标，完全不用联网。
+     */
+    public static void seedBundledIcons(Context c, List<Site> sites) {
+        for (Site s : sites) {
+            File f = iconFile(c, s);
+            if (f.exists() && f.length() > 0) continue;
+            InputStream in = null;
+            FileOutputStream out = null;
+            try {
+                in = c.getAssets().open("icons/" + key(s.url) + ".png");
+                out = new FileOutputStream(f);
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                setChecked(c, s, System.currentTimeMillis());
+            } catch (Exception ignored) {
+                // assets 里没有这个站的内置图标：留着后面联网抓
+            } finally {
+                try { if (in != null) in.close(); } catch (Exception ignored) { }
+                try { if (out != null) out.close(); } catch (Exception ignored) { }
+            }
+        }
+    }
+
+    public static boolean hasIcon(Context c, Site s) {
+        File f = iconFile(c, s);
+        return f.exists() && f.length() > 0;
+    }
+
+    public static long lastChecked(Context c, Site s) {
+        return prefs(c).getLong("t_" + key(s.url), 0L);
+    }
+
+    public static void setChecked(Context c, Site s, long t) {
+        prefs(c).edit().putLong("t_" + key(s.url), t).apply();
+    }
+
+    public static boolean needCheck(Context c, Site s) {
+        return System.currentTimeMillis() - lastChecked(c, s) > ICON_CHECK_INTERVAL_MS;
+    }
+
+    // ---------- 联网抓图标 ----------
+
+    /**
+     * 只有网站的图标真的换了才更新本地图标，返回 true 表示已更新。
+     * 第一次联网只记基线（不动内置图标）；之后每次比对，变了才替换。
+     */
+    public static boolean checkRemoteChanged(Context c, Site s) {
+        String[] urls = faviconCandidates(s);
+        byte[] raw = null;
+        for (String u : urls) {
+            raw = downloadBytes(u);
+            if (raw != null) break;
+        }
+        setChecked(c, s, System.currentTimeMillis());
+        if (raw == null) return false;
+
+        String hash = sha1(raw);
+        String prefKey = "ic_" + key(s.url);
+        String last = prefs(c).getString(prefKey, "");
+        prefs(c).edit().putString(prefKey, hash).apply();
+
+        if (last.isEmpty()) {
+            // 第一次联网：本地还没图标才用（内置图标优先保留）
+            if (hasIcon(c, s)) return false;
+        } else if (hash.equals(last)) {
+            return false;   // 网站图标没变，什么都不做
+        }
+        Bitmap b = BitmapFactory.decodeByteArray(raw, 0, raw.length);
+        if (b == null || b.getWidth() < 8) return false;
+        saveIcon(c, s, b);
+        return true;
+    }
+
+    /** 用户手动"刷新图标"：无条件联网取一次 */
+    public static Bitmap fetchIcon(Site s) {
+        for (String u : faviconCandidates(s)) {
+            Bitmap b = downloadImage(u);
+            if (b != null && b.getWidth() >= 8) return b;
+        }
+        return null;
+    }
+
+    private static String[] faviconCandidates(Site s) {
+        String host = s.host();
+        String scheme = s.url.toLowerCase().startsWith("https://") ? "https" : "http";
+        if (host.isEmpty()) return new String[0];
+        return new String[]{
+                scheme + "://" + host + "/favicon.ico",
+                "https://" + host + "/favicon.ico",
+                "http://" + host + "/favicon.ico",
+                scheme + "://" + host + "/favicon.png",
+                "https://" + host + "/favicon.png"
+        };
+    }
+
+    private static byte[] downloadBytes(String u) {
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL(u);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(6000);
+            conn.setReadTimeout(6000);
+            conn.setInstanceFollowRedirects(true);
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) WebTabs");
+            if (conn.getResponseCode() != 200) return null;
+            String type = conn.getContentType();
+            if (type != null && type.contains("text/html")) return null;   // 不是图标
+            InputStream in = conn.getInputStream();
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+            in.close();
+            byte[] data = bos.toByteArray();
+            return data.length > 0 ? data : null;
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    private static Bitmap downloadImage(String u) {
+        byte[] raw = downloadBytes(u);
+        return raw == null ? null : BitmapFactory.decodeByteArray(raw, 0, raw.length);
+    }
+
+    private static String sha1(byte[] data) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-1");
+            byte[] d = md.digest(data);
+            StringBuilder sb = new StringBuilder();
+            for (byte b : d) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            return "len" + data.length;
+        }
+    }
+
+    /** 字母头像（首字母 + 固定颜色）兜底 */
     public static Bitmap letterIcon(Site s) {
         int size = 96;
         Bitmap bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
@@ -148,53 +298,5 @@ public class Store {
         p.getTextBounds(ch, 0, ch.length(), r);
         cv.drawText(ch, size / 2f, size / 2f - r.exactCenterY() + r.height() / 2f, p);
         return bmp;
-    }
-
-    /** 联网抓取网站图标：先 /favicon.ico，再 /favicon.png；失败返回 null */
-    public static Bitmap fetchIcon(Site s) {
-        String[] candidates = {
-                s.url.replaceAll("(?i)^http://", "http://") ,
-                s.host()
-        };
-        String[] paths;
-        String scheme = s.url.toLowerCase().startsWith("https://") ? "https" : "http";
-        String host = s.host();
-        if (host.isEmpty()) return null;
-        String[] attempts = {
-                scheme + "://" + host + "/favicon.ico",
-                "https://" + host + "/favicon.ico",
-                "http://" + host + "/favicon.ico",
-                scheme + "://" + host + "/favicon.png",
-                "https://" + host + "/favicon.png"
-        };
-        for (String u : attempts) {
-            Bitmap b = downloadImage(u);
-            if (b != null && b.getWidth() >= 8) return b;
-        }
-        return null;
-    }
-
-    private static Bitmap downloadImage(String u) {
-        HttpURLConnection conn = null;
-        try {
-            URL url = new URL(u);
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setConnectTimeout(6000);
-            conn.setReadTimeout(6000);
-            conn.setInstanceFollowRedirects(true);
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) WebTabs");
-            int code = conn.getResponseCode();
-            if (code != 200) return null;
-            String type = conn.getContentType();
-            if (type != null && type.contains("text/html")) return null; // 不是图标
-            InputStream in = conn.getInputStream();
-            Bitmap b = BitmapFactory.decodeStream(in);
-            in.close();
-            return b;
-        } catch (Exception e) {
-            return null;
-        } finally {
-            if (conn != null) conn.disconnect();
-        }
     }
 }
