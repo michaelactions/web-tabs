@@ -68,9 +68,8 @@ public class WebActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_web);
 
-        if (Store.prefs(this).getBoolean("keepOn", true)) {
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        }
+        FullScreen.applyKeepScreenOn(this);
+        FullScreen.apply(this);
         refreshSec = Store.prefs(this).getInt("refreshSec", 0);
 
         tabBar = (LinearLayout) findViewById(R.id.tabBar);
@@ -88,13 +87,6 @@ public class WebActivity extends Activity {
 
         if (!Store.prefs(this).getBoolean("showBar", true)) {
             barScroll.setVisibility(View.GONE);
-        }
-        if (Store.prefs(this).getBoolean("fullscreen", false)) {
-            getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                            | View.SYSTEM_UI_FLAG_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         }
 
         select(Math.max(0, Math.min(start, tabs.size() - 1)));
@@ -225,7 +217,7 @@ public class WebActivity extends Activity {
         String[] items = {
                 "屏幕常亮：" + (p.getBoolean("keepOn", true) ? "开" : "关"),
                 "显示标签栏：" + (p.getBoolean("showBar", true) ? "显示" : "隐藏"),
-                "全屏沉浸：" + (p.getBoolean("fullscreen", false) ? "开" : "关"),
+                "全屏沉浸：" + (p.getBoolean("fullscreen", true) ? "开" : "关"),
                 "自动刷新：" + p.getInt("refreshSec", 0) + " 秒（重启本文页生效）"
         };
         new AlertDialog.Builder(this)
@@ -233,7 +225,7 @@ public class WebActivity extends Activity {
                 .setItems(items, (d, w) -> {
                     if (w == 0) p.edit().putBoolean("keepOn", !p.getBoolean("keepOn", true)).apply();
                     else if (w == 1) p.edit().putBoolean("showBar", !p.getBoolean("showBar", true)).apply();
-                    else if (w == 2) p.edit().putBoolean("fullscreen", !p.getBoolean("fullscreen", false)).apply();
+                    else if (w == 2) p.edit().putBoolean("fullscreen", !p.getBoolean("fullscreen", true)).apply();
                     reapplyWindowFlags();
                 })
                 .setNegativeButton("关闭", null)
@@ -241,17 +233,15 @@ public class WebActivity extends Activity {
     }
 
     private void reapplyWindowFlags() {
-        boolean keep = Store.prefs(this).getBoolean("keepOn", true);
-        if (keep) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        if (Store.prefs(this).getBoolean("fullscreen", false)) {
-            getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
-        } else {
-            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
-        }
+        FullScreen.applyKeepScreenOn(this);
+        FullScreen.apply(this);
         barScroll.setVisibility(Store.prefs(this).getBoolean("showBar", true) ? View.VISIBLE : View.GONE);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) FullScreen.apply(this);   // 弹窗/切回来后恢复全屏
     }
 
     @Override

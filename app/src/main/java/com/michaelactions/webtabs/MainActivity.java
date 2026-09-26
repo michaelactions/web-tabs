@@ -50,7 +50,8 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        FullScreen.applyKeepScreenOn(this);
+        FullScreen.apply(this);
 
         ensureDefaults();
         sites = Store.load(this);
@@ -71,8 +72,16 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) FullScreen.apply(this);   // 弹窗/切换回来后恢复全屏
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
+        FullScreen.applyKeepScreenOn(this);
+        FullScreen.apply(this);
         ensureDefaults();
         sites = Store.load(this);
         adapter.notifyDataSetChanged();
@@ -189,7 +198,7 @@ public class MainActivity extends Activity {
         final String[] items = {
                 "屏幕常亮：" + (p.getBoolean("keepOn", true) ? "开" : "关"),
                 "显示标签栏：" + (p.getBoolean("showBar", true) ? "显示" : "隐藏"),
-                "全屏沉浸：" + (p.getBoolean("fullscreen", false) ? "开" : "关"),
+                "全屏沉浸：" + (p.getBoolean("fullscreen", true) ? "开" : "关"),
                 "桌面版网页：" + (p.getBoolean("desktopUA", false) ? "开" : "关"),
                 "自动刷新：" + p.getInt("refreshSec", 0) + " 秒（0=不刷新）",
                 "重新抓取全部图标",
@@ -200,7 +209,7 @@ public class MainActivity extends Activity {
                 .setItems(items, (d, w) -> {
                     if (w == 0) p.edit().putBoolean("keepOn", !p.getBoolean("keepOn", true)).apply();
                     else if (w == 1) p.edit().putBoolean("showBar", !p.getBoolean("showBar", true)).apply();
-                    else if (w == 2) p.edit().putBoolean("fullscreen", !p.getBoolean("fullscreen", false)).apply();
+                    else if (w == 2) { p.edit().putBoolean("fullscreen", !p.getBoolean("fullscreen", true)).apply(); FullScreen.apply(this); }
                     else if (w == 3) p.edit().putBoolean("desktopUA", !p.getBoolean("desktopUA", false)).apply();
                     else if (w == 4) askRefresh();
                     else if (w == 5) { clearIcons(); fetchMissingIcons(); }
