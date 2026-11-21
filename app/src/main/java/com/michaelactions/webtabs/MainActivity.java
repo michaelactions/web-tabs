@@ -36,8 +36,12 @@ public class MainActivity extends Activity {
             {"工具站", "https://tools.office3.pp.ua/"},
             {"节点切换", "https://tools.office3.pp.ua/failover/"},
             {"状态监控", "https://status.digac.icu/"},
-            {"华住会看板", "https://huazhu.office3.pp.ua/"}
-    };
+            {"华住会看板", "https://huazhu.office3.pp.ua/"},
+            {"AIDA64南岸电信", "http://10.0.1.10/"},
+            {"南岸电信爱快", "http://10.0.1.1/"},
+            {"南岸联通爱快", "http://10.0.2.1/"},
+            {"荣昌联通爱快", "http://172.30.6.1/"}
+             };
 
     private List<Store.Site> sites;
     private GridView grid;
@@ -197,7 +201,7 @@ public class MainActivity extends Activity {
         final android.content.SharedPreferences p = Store.prefs(this);
         final String[] items = {
                 "屏幕常亮：" + (p.getBoolean("keepOn", true) ? "开" : "关"),
-                "显示标签栏：" + (p.getBoolean("showBar", true) ? "显示" : "隐藏"),
+                "标签栏：" + (p.getBoolean("showBar", false) ? "显示" : "隐藏（只看一个页面）"),
                 "全屏沉浸：" + (p.getBoolean("fullscreen", true) ? "开" : "关"),
                 "桌面版网页：" + (p.getBoolean("desktopUA", false) ? "开" : "关"),
                 "自动刷新：" + p.getInt("refreshSec", 0) + " 秒（0=不刷新）",
@@ -208,7 +212,7 @@ public class MainActivity extends Activity {
                 .setTitle("设置")
                 .setItems(items, (d, w) -> {
                     if (w == 0) p.edit().putBoolean("keepOn", !p.getBoolean("keepOn", true)).apply();
-                    else if (w == 1) p.edit().putBoolean("showBar", !p.getBoolean("showBar", true)).apply();
+                    else if (w == 1) p.edit().putBoolean("showBar", !p.getBoolean("showBar", false)).apply();
                     else if (w == 2) { p.edit().putBoolean("fullscreen", !p.getBoolean("fullscreen", true)).apply(); FullScreen.apply(this); }
                     else if (w == 3) p.edit().putBoolean("desktopUA", !p.getBoolean("desktopUA", false)).apply();
                     else if (w == 4) askRefresh();
