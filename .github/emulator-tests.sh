@@ -7,4 +7,5 @@ adb logcat -c
 adb shell am instrument -w com.michaelactions.webtabs.test/androidx.test.runner.AndroidJUnitRunner > screenshots/instrumentation.txt
 cat screenshots/instrumentation.txt
 python3 -c 'from pathlib import Path; s=Path("screenshots/instrumentation.txt").read_text(); assert "OK (1 test)" in s and "FAILURES" not in s and "INSTRUMENTATION_FAILED" not in s, s'
-adb pull /sdcard/Android/data/com.michaelactions.webtabs/files/smoke.png screenshots/smoke.png
+adb exec-out run-as com.michaelactions.webtabs cat files/smoke.png > screenshots/smoke.png
+test -s screenshots/smoke.png

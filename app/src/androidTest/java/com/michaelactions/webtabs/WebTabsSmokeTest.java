@@ -120,7 +120,7 @@ public class WebTabsSmokeTest {
                     });
                     if (i == 2) {
                         Bitmap screenshot = getInstrumentation().getUiAutomation().takeScreenshot();
-                        try (FileOutputStream out = new FileOutputStream(new File(main.getExternalFilesDir(null), "smoke.png"))) {
+                        try (FileOutputStream out = new FileOutputStream(new File(main.getFilesDir(), "smoke.png"))) {
                             screenshot.compress(Bitmap.CompressFormat.PNG, 100, out);
                         }
                     }
