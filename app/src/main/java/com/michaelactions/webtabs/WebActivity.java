@@ -16,8 +16,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.DownloadListener;
-import android.webkit.ProxyConfig;
-import android.webkit.ProxyController;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -55,6 +53,7 @@ private FrameLayout container;
 private HorizontalScrollView barScroll;
 private ProgressBar progress;
 private Button btnFloat;
+private boolean proxyOk = false;
 private final Handler handler = new Handler(Looper.getMainLooper());
 private int refreshSec =0;
 private final Runnable refresher = new Runnable() {
@@ -101,18 +100,27 @@ select(Math.max(0, Math.min(start, tabs.size() -1)));
 
 /**启动本地代理并让 WebView走它（按 IP段自动选上游） */
 private void applyProxy() {
-if (Build.VERSION.SDK_INT <21) return;
+proxyOk = false;
 int p = ProxyServer.ensureStarted();
 if (p <=0) return;
 try {
-ProxyConfig cfg = new ProxyConfig.Builder().addProxyRule("127.0.0.1:" + p).build();
+Class<?> cfgCls = Class.forName("android.webkit.ProxyConfig");
+Class<?> bCls = Class.forName("android.webkit.ProxyConfig$Builder");
+Object b = bCls.getConstructor().newInstance();
+bCls.getMethod("addProxyRule", String.class).invoke(b, "127.0.0.1:" + p);
+Object cfg = bCls.getMethod("build").invoke(b);
+Class<?> ctlCls = Class.forName("android.webkit.ProxyController");
+Object ctl = ctlCls.getMethod("getInstance").invoke(null);
 Executor ex = new Executor() {
 public void execute(Runnable r) { r.run(); }
 };
-ProxyController.getInstance().setProxyOverride(cfg, ex, new Runnable() {
+Runnable cb = new Runnable() {
 public void run() { }
-});
-} catch (Throwable ignored) {
+};
+ctlCls.getMethod("setProxyOverride", cfgCls, Executor.class, Runnable.class).invoke(ctl, cfg, ex, cb);
+proxyOk = true;
+} catch (Throwable t) {
+proxyOk = false;
 }
 }
 
@@ -286,7 +294,8 @@ reapplyWindowFlags();
 
 private String proxyInfo() {
 int p = ProxyServer.port();
-return p >0 ? ("已启用127.0.0.1:" + p) : "未启动";
+if (p <=0) return "未启动";
+return proxyOk ? ("已启用127.0.0.1:" + p) : "本地端口" + p + "，WebView代理未生效";
 }
 
 private void showProxyInfo() {
