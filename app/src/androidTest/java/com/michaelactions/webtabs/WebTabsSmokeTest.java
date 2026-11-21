@@ -139,6 +139,45 @@ public class WebTabsSmokeTest {
             && Math.abs(b - Color.blue(expected)) <= tolerance);
     }
 
+    /** 等 WebView 报告一帧视觉状态；超时不直接失败，交给后面的截图轮询判定。 */
+    private boolean awaitVisualFrame(WebView view) throws Exception {
+        final CountDownLatch drawn = new CountDownLatch(1);
+        getInstrumentation().runOnMainSync(() ->
+            view.postVisualStateCallback(System.nanoTime(), id -> drawn.countDown()));
+        return drawn.await(5, TimeUnit.SECONDS);
+    }
+
+    private static boolean nearColor(int pixel, int expected, int tolerance) {
+        return Math.abs(Color.red(pixel) - Color.red(expected)) <= tolerance
+            && Math.abs(Color.green(pixel) - Color.green(expected)) <= tolerance
+            && Math.abs(Color.blue(pixel) - Color.blue(expected)) <= tolerance;
+    }
+
+    private static int darkLetterboxRows(Bitmap shot, int x, int fromY) {
+        int rows = 0;
+        for (int y = fromY; y < shot.getHeight(); y++) {
+            if (nearColor(shot.getPixel(x, y), 0xFF1B1B1B, 12)) rows++;
+        }
+        return rows;
+    }
+
+    /** 视觉状态回调 + 有界截图轮询，等 WebView 真正合成出皮肤和黑边（JS 就绪 != 已上屏）。 */
+    private Bitmap awaitStableAidaPixels(WebView view) throws Exception {
+        long deadline = android.os.SystemClock.elapsedRealtime() + 15000;
+        Bitmap last = null;
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            awaitVisualFrame(view);
+            last = getInstrumentation().getUiAutomation().takeScreenshot();
+            if (last != null && last.getWidth() > 0 && last.getHeight() > 720) {
+                int cx = last.getWidth() / 2;
+                if (nearColor(last.getPixel(cx, 400), 0xFF3B3B3B, 4)
+                        && darkLetterboxRows(last, cx, 700) >= 20) return last;
+            }
+            Thread.sleep(100);
+        }
+        return last;
+    }
+
     @Test public void testAllProxyRoutesFullscreenAndKeepOn() throws Throwable {
         ProxyServer.resetForTests();
         MainActivity main = (MainActivity)getInstrumentation().startActivitySync(new Intent(getInstrumentation().getTargetContext(), MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
@@ -250,6 +289,23 @@ public class WebTabsSmokeTest {
                     + "getComputedStyle(document.documentElement).backgroundColor,"
                     + "r.width,r.height,window.innerWidth,window.innerHeight,"
                     + "document.documentElement.scrollWidth];})()");
+
+                // 先等 WebView 真正把这一帧合成上屏，再存图/存诊断，最后才断言像素。
+                Bitmap shot = awaitStableAidaPixels(view);
+                assertNotNull("no screenshot", shot);
+                try (FileOutputStream out = new FileOutputStream(new File(main.getFilesDir(), "aida-letterbox.png"))) {
+                    shot.compress(Bitmap.CompressFormat.PNG, 100, out);
+                }
+                int cx = shot.getWidth() / 2;
+                try (Writer diag = new OutputStreamWriter(new FileOutputStream(
+                        new File(main.getFilesDir(), "aida-letterbox.txt")), StandardCharsets.UTF_8)) {
+                    diag.write("size=" + shot.getWidth() + "x" + shot.getHeight() + "\n");
+                    diag.write("skinCentre=" + String.format("#%06X", shot.getPixel(cx, 400) & 0xFFFFFF) + "\n");
+                    diag.write("bottom=" + String.format("#%06X", shot.getPixel(cx, shot.getHeight() - 10) & 0xFFFFFF) + "\n");
+                    diag.write("darkRowsBelow700=" + darkLetterboxRows(shot, cx, 700) + "\n");
+                    diag.write("js=" + skin + "\n");
+                }
+
                 assertEquals("AIDA body background must be dark", "rgb(27, 27, 27)", skin.getString(0));
                 assertEquals("AIDA html background must be dark", "rgb(27, 27, 27)", skin.getString(1));
                 assertEquals("skin width must not change", 1366.0, skin.getDouble(2), 0.5);
@@ -259,26 +315,16 @@ public class WebTabsSmokeTest {
                 assertTrue("letterbox viewport must be taller than the skin: " + skin.getDouble(5),
                     skin.getDouble(5) > 768.0 + 20.0);
                 assertEquals("horizontal layout width must not change", 1366.0, skin.getDouble(6), 0.5);
-
-                Bitmap shot = getInstrumentation().getUiAutomation().takeScreenshot();
-                assertNotNull(shot);
                 assertEquals("regression must run on the 1280x800 tablet AVD", 1280, shot.getWidth());
                 assertEquals("regression must run on the 1280x800 tablet AVD", 800, shot.getHeight());
-                assertChannelNear("AIDA skin centre", shot.getPixel(shot.getWidth() / 2, 400), 0xFF3B3B3B, 4);
-                int darkRows = 0;
-                for (int y = 700; y < shot.getHeight(); y++) {
-                    int p = shot.getPixel(shot.getWidth() / 2, y);
-                    if (Math.abs(Color.red(p) - 27) <= 12 && Math.abs(Color.green(p) - 27) <= 12
-                            && Math.abs(Color.blue(p) - 27) <= 12) darkRows++;
-                }
+                assertChannelNear("AIDA skin centre", shot.getPixel(cx, 400), 0xFF3B3B3B, 4);
+                int darkRows = darkLetterboxRows(shot, cx, 700);
                 assertTrue("AIDA letterbox must be repainted dark below the skin, dark rows=" + darkRows,
                     darkRows >= 20);
-                try (FileOutputStream out = new FileOutputStream(new File(main.getFilesDir(), "aida-letterbox.png"))) {
-                    shot.compress(Bitmap.CompressFormat.PNG, 100, out);
-                }
 
                 getInstrumentation().runOnMainSync(() -> view.loadUrl("http://10.0.2.1/"));
                 waitForTitle(web, "Plain");
+                awaitVisualFrame(view);
                 JSONArray plainState = evalArray(view,
                     "(function(){return [getComputedStyle(document.body).backgroundColor,"
                     + "document.documentElement.getAttribute('data-webtabs-aida')];})()");
