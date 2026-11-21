@@ -34,11 +34,13 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
-    defaultConfig { testInstrumentationRunner "android.test.InstrumentationTestRunner" }
+    defaultConfig { testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner" }
     lint { abortOnError false }
 }
 
 dependencies {
     implementation 'androidx.webkit:webkit:1.12.1'
     testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test:runner:1.5.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
 }

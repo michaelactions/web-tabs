@@ -3,7 +3,11 @@ package com.michaelactions.webtabs;
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.test.ActivityInstrumentationTestCase2;
+import androidx.test.platform.app.InstrumentationRegistry;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import static org.junit.Assert.*;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
@@ -18,8 +22,9 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
 /** Real emulator WebView -> local relay -> mock authenticated upstream for every LAN. */
-public class WebTabsSmokeTest extends ActivityInstrumentationTestCase2<MainActivity> {
-    public WebTabsSmokeTest() { super(MainActivity.class); }
+@RunWith(AndroidJUnit4.class)
+public class WebTabsSmokeTest {
+    private android.app.Instrumentation getInstrumentation() { return InstrumentationRegistry.getInstrumentation(); }
     private static class Mock implements AutoCloseable {
         final ServerSocket server;
         final AtomicInteger hits = new AtomicInteger();
@@ -61,8 +66,8 @@ public class WebTabsSmokeTest extends ActivityInstrumentationTestCase2<MainActiv
         }
         return null;
     }
-    public void testAllProxyRoutesFullscreenAndKeepOn() throws Throwable {
-        MainActivity main = getActivity();
+    @Test public void testAllProxyRoutesFullscreenAndKeepOn() throws Throwable {
+        MainActivity main = (MainActivity)getInstrumentation().startActivitySync(new Intent(getInstrumentation().getTargetContext(), MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         try (Mock a = new Mock("Nanan-Telecom"); Mock b = new Mock("Nanan-Unicom"); Mock c = new Mock("Rongchang-Unicom")) {
             ProxyServer.start(new ProxyServer.Upstream[]{
                 new ProxyServer.Upstream("127.0.0.1", a.port(), "Basic test-" + a.marker),
@@ -74,7 +79,7 @@ public class WebTabsSmokeTest extends ActivityInstrumentationTestCase2<MainActiv
                 new Store.Site("南岸联通", "http://10.0.2.1/"),
                 new Store.Site("荣昌联通", "http://172.30.6.1/")
             );
-            runTestOnUiThread(() -> {
+            getInstrumentation().runOnMainSync(() -> {
                 Store.save(main, sites);
                 Store.prefs(main).edit().putBoolean("fullscreen", true).putBoolean("showBar", true).putBoolean("keepOn", true).commit();
             });
