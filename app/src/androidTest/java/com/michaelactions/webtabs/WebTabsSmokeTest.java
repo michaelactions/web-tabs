@@ -279,11 +279,11 @@ public class WebTabsSmokeTest {
 
                 getInstrumentation().runOnMainSync(() -> view.loadUrl("http://10.0.2.1/"));
                 waitForTitle(web, "Plain");
-                JSONArray plain = evalArray(view,
+                JSONArray plainState = evalArray(view,
                     "(function(){return [getComputedStyle(document.body).backgroundColor,"
                     + "document.documentElement.getAttribute('data-webtabs-aida')];})()");
-                assertEquals("non-AIDA site must keep its white body", "rgb(255, 255, 255)", plain.getString(0));
-                assertTrue("non-AIDA site must not be marked as AIDA", plain.isNull(1));
+                assertEquals("non-AIDA site must keep its white body", "rgb(255, 255, 255)", plainState.getString(0));
+                assertTrue("non-AIDA site must not be marked as AIDA", plainState.isNull(1));
                 final int[] nativeBg = new int[1];
                 getInstrumentation().runOnMainSync(() -> {
                     Drawable d = view.getBackground();
