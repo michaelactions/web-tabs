@@ -143,7 +143,9 @@ public class WebTabsSmokeTest {
     private boolean awaitVisualFrame(WebView view) throws Exception {
         final CountDownLatch drawn = new CountDownLatch(1);
         getInstrumentation().runOnMainSync(() ->
-            view.postVisualStateCallback(System.nanoTime(), id -> drawn.countDown()));
+            view.postVisualStateCallback(System.nanoTime(), new WebView.VisualStateCallback() {
+                @Override public void onComplete(long requestId) { drawn.countDown(); }
+            }));
         return drawn.await(5, TimeUnit.SECONDS);
     }
 
