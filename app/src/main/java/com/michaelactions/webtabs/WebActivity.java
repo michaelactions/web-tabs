@@ -287,7 +287,7 @@ private void settings() {
 final android.content.SharedPreferences p = Store.prefs(this);
 String[] items = {
 "屏幕常亮：" + (p.getBoolean("keepOn", true) ? "开" : "关"),
-"标签栏：" + (p.getBoolean("showBar", false) ? "显示" : "隐藏（只显示一个页面）"),
+"标签栏：" + (!FullScreen.isOn(this) && p.getBoolean("showBar", false) ? "显示" : "隐藏（只显示一个页面）"),
 "全屏沉浸：" + (p.getBoolean("fullscreen", true) ? "开" : "关"),
 "自动刷新：" + p.getInt("refreshSec",0) + "秒（重开页面生效）",
 "内网代理：" + proxyInfo()
@@ -297,7 +297,7 @@ new AlertDialog.Builder(this)
 .setItems(items, (d, w) -> {
 if (w ==0) p.edit().putBoolean("keepOn", !p.getBoolean("keepOn", true)).apply();
 else if (w ==1) {
-    boolean show = !p.getBoolean("showBar", false);
+    boolean show = FullScreen.isOn(this) || !p.getBoolean("showBar", false);
     p.edit().putBoolean("showBar", show).putBoolean("fullscreen", !show).apply();
 }
 else if (w ==2) p.edit().putBoolean("fullscreen", !p.getBoolean("fullscreen", true)).apply();

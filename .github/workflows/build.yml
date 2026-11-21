@@ -39,10 +39,7 @@ jobs:
           target: google_apis
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            gradle connectedDebugAndroidTest --no-daemon --stacktrace
-            mkdir -p screenshots
-            adb pull /sdcard/Android/data/com.michaelactions.webtabs/files/smoke.png screenshots/smoke.png
+          script: bash .github/emulator-tests.sh
       - name: Inject personal proxy credentials
         env:
           PROXY_CREDENTIALS: ${{ secrets.WEBTABS_PROXY_CREDENTIALS }}

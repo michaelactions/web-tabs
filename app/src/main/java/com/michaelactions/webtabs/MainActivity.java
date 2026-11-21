@@ -207,7 +207,7 @@ public class MainActivity extends Activity {
         final android.content.SharedPreferences p = Store.prefs(this);
         final String[] items = {
                 "屏幕常亮：" + (p.getBoolean("keepOn", true) ? "开" : "关"),
-                "标签栏：" + (p.getBoolean("showBar", false) ? "显示" : "隐藏（只看一个页面）"),
+                "标签栏：" + (!FullScreen.isOn(this) && p.getBoolean("showBar", false) ? "显示" : "隐藏（只看一个页面）"),
                 "全屏沉浸：" + (p.getBoolean("fullscreen", true) ? "开" : "关"),
                 "桌面版网页：" + (p.getBoolean("desktopUA", false) ? "开" : "关"),
                 "自动刷新：" + p.getInt("refreshSec", 0) + " 秒（0=不刷新）",
@@ -217,9 +217,9 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this)
                 .setTitle("设置")
                 .setItems(items, (d, w) -> {
-                    if (w == 0) p.edit().putBoolean("keepOn", !p.getBoolean("keepOn", true)).apply();
+                    if (w == 0) { p.edit().putBoolean("keepOn", !p.getBoolean("keepOn", true)).apply(); FullScreen.applyKeepScreenOn(this); }
                     else if (w == 1) {
-                        boolean show = !p.getBoolean("showBar", false);
+                        boolean show = FullScreen.isOn(this) || !p.getBoolean("showBar", false);
                         p.edit().putBoolean("showBar", show).putBoolean("fullscreen", !show).apply();
                         FullScreen.apply(this);
                     }
