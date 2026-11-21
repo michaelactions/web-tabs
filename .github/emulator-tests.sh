@@ -17,6 +17,7 @@ cat screenshots/instrumentation.txt
 adb exec-out run-as com.michaelactions.webtabs cat files/smoke.png > screenshots/smoke.png 2>/dev/null || true
 adb exec-out run-as com.michaelactions.webtabs cat files/aida-letterbox.png > screenshots/aida-letterbox.png 2>/dev/null || true
 adb exec-out run-as com.michaelactions.webtabs cat files/aida-letterbox.txt > screenshots/aida-letterbox.txt 2>/dev/null || true
+adb exec-out run-as com.michaelactions.webtabs cat files/plain-page.png > screenshots/plain-page.png 2>/dev/null || true
 adb logcat -d -t 2000 > screenshots/logcat.txt 2>/dev/null || true
 python3 - <<'PY'
 from pathlib import Path
@@ -32,6 +33,7 @@ assert "INSTRUMENTATION_CODE: -1" in s, s
 PY
 test -s screenshots/smoke.png
 test -s screenshots/aida-letterbox.png
+test -s screenshots/plain-page.png
 if [ "$instrument_rc" -ne 0 ]; then
   echo "am instrument exited $instrument_rc"
   exit "$instrument_rc"

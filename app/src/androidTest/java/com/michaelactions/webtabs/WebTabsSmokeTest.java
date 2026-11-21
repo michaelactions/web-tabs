@@ -4,8 +4,6 @@ import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Color;
-import android.graphics.drawable.ColorDrawable;
-import android.graphics.drawable.Drawable;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import org.json.JSONArray;
@@ -180,6 +178,23 @@ public class WebTabsSmokeTest {
         return last;
     }
 
+    /** 普通站点：等一帧真正上屏且中间/底部都是页面白底。 */
+    private Bitmap awaitStablePlainPixels(WebView view) throws Exception {
+        long deadline = android.os.SystemClock.elapsedRealtime() + 15000;
+        Bitmap last = null;
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            awaitVisualFrame(view);
+            last = getInstrumentation().getUiAutomation().takeScreenshot();
+            if (last != null && last.getHeight() > 410) {
+                int cx = last.getWidth() / 2;
+                if (nearColor(last.getPixel(cx, 400), 0xFFFFFFFF, 6)
+                        && nearColor(last.getPixel(cx, last.getHeight() - 10), 0xFFFFFFFF, 6)) return last;
+            }
+            Thread.sleep(100);
+        }
+        return last;
+    }
+
     @Test public void testAllProxyRoutesFullscreenAndKeepOn() throws Throwable {
         ProxyServer.resetForTests();
         MainActivity main = (MainActivity)getInstrumentation().startActivitySync(new Intent(getInstrumentation().getTargetContext(), MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
@@ -326,18 +341,20 @@ public class WebTabsSmokeTest {
 
                 getInstrumentation().runOnMainSync(() -> view.loadUrl("http://10.0.2.1/"));
                 waitForTitle(web, "Plain");
-                awaitVisualFrame(view);
+                Bitmap plainShot = awaitStablePlainPixels(view);
+                assertNotNull("no plain-page screenshot", plainShot);
+                try (FileOutputStream out = new FileOutputStream(new File(main.getFilesDir(), "plain-page.png"))) {
+                    plainShot.compress(Bitmap.CompressFormat.PNG, 100, out);
+                }
                 JSONArray plainState = evalArray(view,
                     "(function(){return [getComputedStyle(document.body).backgroundColor,"
                     + "document.documentElement.getAttribute('data-webtabs-aida')];})()");
                 assertEquals("non-AIDA site must keep its white body", "rgb(255, 255, 255)", plainState.getString(0));
                 assertTrue("non-AIDA site must not be marked as AIDA", plainState.isNull(1));
-                final int[] nativeBg = new int[1];
-                getInstrumentation().runOnMainSync(() -> {
-                    Drawable d = view.getBackground();
-                    nativeBg[0] = d instanceof ColorDrawable ? ((ColorDrawable) d).getColor() : Color.TRANSPARENT;
-                });
-                assertEquals("WebView background must reset to white away from AIDA", Color.WHITE, nativeBg[0]);
+                int pcx = plainShot.getWidth() / 2;
+                assertChannelNear("non-AIDA page centre", plainShot.getPixel(pcx, 400), 0xFFFFFFFF, 6);
+                assertChannelNear("non-AIDA bottom background",
+                    plainShot.getPixel(pcx, plainShot.getHeight() - 10), 0xFFFFFFFF, 6);
             } finally { getInstrumentation().runOnMainSync(web::finish); }
         }
     }
