@@ -34,7 +34,7 @@
 旧版见 [Releases](../../releases)。新版个人 APK 在 Actions 的 `personal-apk` artifact，经测试后直接侧载交付，不作为公共 Release 资产发布。
 
 ## 自己编译
-GitHub Actions 先跑 JVM 单测和 Android 30 模拟器 WebView 测试，再构建带个人代理配置的签名 APK。仓库 Secret `WEBTABS_PROXY_CREDENTIALS` 保存网段到 username/password 的 JSON；构建时写入未跟踪的 assets/proxy-credentials.json。源码没有默认口令。APK 仍含登录凭据，只作个人侧载，请勿公开转发。
+GitHub Actions 先跑 JVM 单测和 Android 30 模拟器 WebView 测试，再构建带个人代理配置的签名 APK。仓库 Secret `WEBTABS_PROXY_CREDENTIALS` 保存网段到 username/password 的 JSON；构建时写入未跟踪的 assets/proxy-credentials.json。源码没有默认口令。`WEBTABS_ARTIFACT_PASSWORD` 为随机产物加密密钥；上传到 Actions 的只有 AES-256-CBC/PBKDF2 加密的 `.apk.enc`，下载后本地解密交付。APK 仍含登录凭据，只作个人侧载，请勿公开转发。
 
 本地编译：JDK 17 + Android SDK（platform 34、build-tools 34.0.0）+ Gradle 8.7：
 ```
