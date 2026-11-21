@@ -15,7 +15,8 @@ final class AidaSkin {
     static final int LETTERBOX = 0xFF1B1B1B;
 
     private static final String DARKEN_JS =
-            "(function(){try{var d=document;if(!d.body)return;"
+            "(function(){try{var d=document;"
+            + "if(!d.body||window.location.hostname!=='10.0.1.10')return;"
             + "d.documentElement.style.setProperty('background-color','#1b1b1b','important');"
             + "d.body.style.setProperty('background-color','#1b1b1b','important');"
             + "d.documentElement.setAttribute('data-webtabs-aida','1');"

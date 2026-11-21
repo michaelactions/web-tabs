@@ -7,7 +7,7 @@ adb shell wm density 160
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 adb logcat -c
-adb shell am instrument -w -e log true com.michaelactions.webtabs.test/androidx.test.runner.AndroidJUnitRunner > screenshots/instrumentation.txt
+adb shell am instrument -w com.michaelactions.webtabs.test/androidx.test.runner.AndroidJUnitRunner > screenshots/instrumentation.txt
 cat screenshots/instrumentation.txt
 python3 - <<'PY'
 from pathlib import Path
