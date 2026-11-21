@@ -8,8 +8,8 @@ android {
         applicationId "com.michaelactions.webtabs"
         minSdk 21
         targetSdk 34
-        versionCode 7
-        versionName "1.2.0"
+        versionCode 8
+        versionName "1.2.1"
     }
 
     signingConfigs {
@@ -34,7 +34,11 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
+    defaultConfig { testInstrumentationRunner "android.test.InstrumentationTestRunner" }
     lint { abortOnError false }
 }
 
-dependencies { }
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+    testImplementation 'junit:junit:4.13.2'
+}

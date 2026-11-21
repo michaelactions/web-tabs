@@ -57,6 +57,12 @@ public class MainActivity extends Activity {
         FullScreen.applyKeepScreenOn(this);
         FullScreen.apply(this);
 
+        android.content.SharedPreferences prefs = Store.prefs(this);
+        if (!prefs.getBoolean("displayV121", false)) {
+            prefs.edit().putBoolean("displayV121", true).putBoolean("showBar", false)
+                .putBoolean("fullscreen", true).apply();
+            FullScreen.apply(this);
+        }
         ensureDefaults();
         sites = Store.load(this);
         Store.seedBundledIcons(this, sites);   // 内置图标落地（不联网），首屏立刻有图标
@@ -212,7 +218,11 @@ public class MainActivity extends Activity {
                 .setTitle("设置")
                 .setItems(items, (d, w) -> {
                     if (w == 0) p.edit().putBoolean("keepOn", !p.getBoolean("keepOn", true)).apply();
-                    else if (w == 1) p.edit().putBoolean("showBar", !p.getBoolean("showBar", false)).apply();
+                    else if (w == 1) {
+                        boolean show = !p.getBoolean("showBar", false);
+                        p.edit().putBoolean("showBar", show).putBoolean("fullscreen", !show).apply();
+                        FullScreen.apply(this);
+                    }
                     else if (w == 2) { p.edit().putBoolean("fullscreen", !p.getBoolean("fullscreen", true)).apply(); FullScreen.apply(this); }
                     else if (w == 3) p.edit().putBoolean("desktopUA", !p.getBoolean("desktopUA", false)).apply();
                     else if (w == 4) askRefresh();

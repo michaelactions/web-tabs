@@ -18,6 +18,11 @@ public class FullScreen {
 /**屏幕常亮 */
 public static void applyKeepScreenOn(Activity a) {
 boolean keep = Store.prefs(a).getBoolean("keepOn", true);
+View content = a.findViewById(android.R.id.content);
+if (content instanceof android.view.ViewGroup) {
+    android.view.ViewGroup group = (android.view.ViewGroup) content;
+    for (int i = 0; i < group.getChildCount(); i++) group.getChildAt(i).setKeepScreenOn(keep);
+}
 if (keep) a.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 else a.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 }

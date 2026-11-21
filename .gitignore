@@ -5,3 +5,6 @@ local.properties
 *.iml
 .idea/
 .DS_Store
+app/src/main/assets/proxy-credentials.json
+screenshots/
+dist/

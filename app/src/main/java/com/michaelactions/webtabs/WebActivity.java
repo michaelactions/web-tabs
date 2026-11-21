@@ -29,7 +29,9 @@ import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Executor;
+import androidx.webkit.ProxyConfig;
+import androidx.webkit.ProxyController;
+import androidx.webkit.WebViewFeature;
 
 /**
  *网页浏览页：屏幕常亮 +全屏；顶部标签栏可隐藏（默认隐藏，只显示一个页面）。
@@ -54,6 +56,7 @@ private HorizontalScrollView barScroll;
 private ProgressBar progress;
 private Button btnFloat;
 private boolean proxyOk = false;
+private boolean proxyReady = false;
 private final Handler handler = new Handler(Looper.getMainLooper());
 private int refreshSec =0;
 private final Runnable refresher = new Runnable() {
@@ -76,8 +79,6 @@ FullScreen.applyKeepScreenOn(this);
 FullScreen.apply(this);
 refreshSec = Store.prefs(this).getInt("refreshSec",0);
 
-applyProxy();
-
 topRow = (LinearLayout) findViewById(R.id.topRow);
 tabBar = (LinearLayout) findViewById(R.id.tabBar);
 container = (FrameLayout) findViewById(R.id.webContainer);
@@ -96,32 +97,44 @@ buildFloatButton();
 applyBarVisibility();
 
 select(Math.max(0, Math.min(start, tabs.size() -1)));
+applyProxy();
 }
 
 /**启动本地代理并让 WebView走它（按 IP段自动选上游） */
 private void applyProxy() {
-proxyOk = false;
-int p = ProxyServer.ensureStarted();
-if (p <=0) return;
-try {
-Class<?> cfgCls = Class.forName("android.webkit.ProxyConfig");
-Class<?> bCls = Class.forName("android.webkit.ProxyConfig$Builder");
-Object b = bCls.getConstructor().newInstance();
-bCls.getMethod("addProxyRule", String.class).invoke(b, "127.0.0.1:" + p);
-Object cfg = bCls.getMethod("build").invoke(b);
-Class<?> ctlCls = Class.forName("android.webkit.ProxyController");
-Object ctl = ctlCls.getMethod("getInstance").invoke(null);
-Executor ex = new Executor() {
-public void execute(Runnable r) { r.run(); }
-};
-Runnable cb = new Runnable() {
-public void run() { }
-};
-ctlCls.getMethod("setProxyOverride", cfgCls, Executor.class, Runnable.class).invoke(ctl, cfg, ex, cb);
-proxyOk = true;
-} catch (Throwable t) {
-proxyOk = false;
+    proxyOk = false;
+    if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
+        proxyFailure();
+        return;
+    }
+    try {
+        int port = ProxyCredentials.start(this);
+        ProxyConfig cfg = new ProxyConfig.Builder()
+                .addProxyRule("http://127.0.0.1:" + port)
+                .removeImplicitRules().build();
+        ProxyController.getInstance().setProxyOverride(cfg,
+                r -> handler.post(r), () -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    proxyOk = true;
+                    proxyReady = true;
+                    loadSelected();
+                });
+    } catch (Exception e) {
+        proxyFailure();
+    }
 }
+
+private void proxyFailure() {
+    proxyReady = false;
+    new AlertDialog.Builder(this).setTitle("WebView代理不可用")
+            .setMessage("为避免内网误走直连，已停止加载。请先升级 Android System WebView 或 Chrome，再重新打开。")
+            .setPositiveButton("返回首页", (d, w) -> finish()).setCancelable(false).show();
+}
+
+private void loadSelected() {
+    if (!proxyReady || current < 0 || current >= tabs.size()) return;
+    Tab t = tabs.get(current);
+    if (t.web.getUrl() == null) t.web.loadUrl(t.site.url);
 }
 
 private void buildFloatButton() {
@@ -145,7 +158,7 @@ container.addView(btnFloat, flp);
 
 /**标签栏显示/隐藏（隐藏时留一个半透明悬浮 ⌂） */
 private void applyBarVisibility() {
-boolean show = Store.prefs(this).getBoolean("showBar", false);
+boolean show = !FullScreen.isOn(this) && Store.prefs(this).getBoolean("showBar", false);
 topRow.setVisibility(show ? View.VISIBLE : View.GONE);
 if (btnFloat != null) btnFloat.setVisibility(show ? View.GONE : View.VISIBLE);
 }
@@ -224,7 +237,6 @@ try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
 catch (Exception e) { Toast.makeText(WebActivity.this, "无法打开下载链接", Toast.LENGTH_SHORT).show(); }
 }
 });
-w.loadUrl(site.url);
 w.setVisibility(View.GONE);
 return w;
 }
@@ -242,6 +254,8 @@ barScroll.post(() -> {
 View v = tabs.get(current).btn;
 barScroll.smoothScrollTo(Math.max(0, v.getLeft() -40),0);
 });
+if (btnFloat != null) btnFloat.bringToFront();
+loadSelected();
 handler.removeCallbacks(refresher);
 if (refreshSec >0) handler.postDelayed(refresher, refreshSec *1000L);
 }
@@ -261,10 +275,9 @@ Toast.makeText(this, "网址已复制", Toast.LENGTH_SHORT).show();
 try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(t.web.getUrl() == null ? t.site.url : t.web.getUrl()))); }
 catch (Exception e) { Toast.makeText(this, "无法打开", Toast.LENGTH_SHORT).show(); }
 } else if (w ==3) {
-Intent it = getIntent();
-it.putExtra("index", idx);
-finish();
-startActivity(it);
+Store.prefs(this).edit().putBoolean("showBar", false).apply();
+select(idx);
+applyBarVisibility();
 }
 })
 .show();
@@ -283,13 +296,31 @@ new AlertDialog.Builder(this)
 .setTitle("设置")
 .setItems(items, (d, w) -> {
 if (w ==0) p.edit().putBoolean("keepOn", !p.getBoolean("keepOn", true)).apply();
-else if (w ==1) p.edit().putBoolean("showBar", !p.getBoolean("showBar", false)).apply();
+else if (w ==1) {
+    boolean show = !p.getBoolean("showBar", false);
+    p.edit().putBoolean("showBar", show).putBoolean("fullscreen", !show).apply();
+}
 else if (w ==2) p.edit().putBoolean("fullscreen", !p.getBoolean("fullscreen", true)).apply();
+else if (w ==3) askRefresh();
 else if (w ==4) showProxyInfo();
 reapplyWindowFlags();
 })
 .setNegativeButton("关闭", null)
 .show();
+}
+
+private void askRefresh() {
+    android.widget.EditText value = new android.widget.EditText(this);
+    value.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+    value.setText(String.valueOf(refreshSec));
+    new AlertDialog.Builder(this).setTitle("自动刷新秒数（0=关闭）").setView(value)
+        .setPositiveButton("保存", (d, w) -> {
+            try { refreshSec = Math.max(0, Integer.parseInt(value.getText().toString())); }
+            catch (NumberFormatException ignored) { return; }
+            Store.prefs(this).edit().putInt("refreshSec", refreshSec).apply();
+            handler.removeCallbacks(refresher);
+            if (refreshSec > 0) handler.postDelayed(refresher, refreshSec * 1000L);
+        }).setNegativeButton("取消", null).show();
 }
 
 private String proxyInfo() {
@@ -301,8 +332,8 @@ return proxyOk ? ("已启用127.0.0.1:" + p) : "本地端口" + p + "，WebView�
 private void showProxyInfo() {
 StringBuilder sb = new StringBuilder();
 sb.append("内网三个网段自动走对应的上游 HTTP代理：\n\n");
-for (String[] r : ProxyServer.RULES) {
-sb.append(r[0]).append("* → ").append(r[1]).append(':').append(r[2]).append('\n');
+for (int i = 0; i < RouteTable.PREFIXES.length; i++) {
+sb.append(RouteTable.PREFIXES[i]).append("0/24 → http://").append(RouteTable.PROXIES[i]).append(":444\n");
 }
 sb.append("\n其它网站直连。本地代理端口：").append(proxyInfo());
 new AlertDialog.Builder(this).setTitle("内网代理规则").setMessage(sb.toString()).setPositiveButton("知道了", null).show();

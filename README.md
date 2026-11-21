@@ -31,10 +31,10 @@
 - 支持内网 http 看板、下载跳系统浏览器、视频自动播放
 
 ## 下载
-到 [Releases](../../releases) 下载 `WebTabs-v*.apk`，传到平板安装（需允许「安装未知来源应用」）。
+旧版见 [Releases](../../releases)。新版个人 APK 在 Actions 的 `personal-apk` artifact，经测试后直接侧载交付，不作为公共 Release 资产发布。
 
 ## 自己编译
-GitHub Actions 自动编译：推送 `main` 或打 `v*` 标签，产物在 Actions artifacts / Releases。
+GitHub Actions 先跑 JVM 单测和 Android 30 模拟器 WebView 测试，再构建带个人代理配置的签名 APK。仓库 Secret `WEBTABS_PROXY_CREDENTIALS` 保存网段到 username/password 的 JSON；构建时写入未跟踪的 assets/proxy-credentials.json。源码没有默认口令。APK 仍含登录凭据，只作个人侧载，请勿公开转发。
 
 本地编译：JDK 17 + Android SDK（platform 34、build-tools 34.0.0）+ Gradle 8.7：
 ```
@@ -44,11 +44,11 @@ gradle assembleRelease
 ## 签名
 `keystore.p12`（别名 `webtabs`，口令 `webtabs123`）随仓库提交，保证每次构建签名一致、可直接覆盖安装升级。仅用于个人侧载，不要用于上架。
 
-## 更新：v1.2.0
+## 更新：v1.2.1（代理与全屏修复）
 
 -**内网代理**：10.0.1.x → wooo.men:444
 -10.0.2.x → cu.wooo.men:444
 -172.30.6.x → rc.wooo.men:444
--App内置本地 HTTP代理自动补 Basic认证，不在规则里的网站直连。
+- App 内置 loopback HTTP 中继自动补 Basic 认证。不在规则内的网站直连；认证/代理失败不回退内网直连。使用 AndroidX WebKit `ProxyController`，仅在覆盖代理完成回调后加载所选页面。HTTP 代理链路为明文，不承诺传输加密。
 -**默认标签新增**：AIDA64(10.0.1.10)、南岸电信爱快(10.0.1.1)、南岸联通爱快(10.0.2.1)、荣昌联通爱快(172.30.6.1)。
 -**全屏**：默认隐藏标签栏，只显示一个页面，左上角半透明悬浮 ⌂可回列表/长按进设置；系统栏强制隐藏（含 FLAG_FULLSCREEN兜底）。

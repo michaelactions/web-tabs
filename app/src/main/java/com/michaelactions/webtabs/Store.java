@@ -238,6 +238,7 @@ public class Store {
         HttpURLConnection conn = null;
         try {
             URL url = new URL(u);
+            if (RouteTable.index(url.getHost()) >= 0) return null;
             conn = (HttpURLConnection) url.openConnection();
             conn.setConnectTimeout(6000);
             conn.setReadTimeout(6000);
