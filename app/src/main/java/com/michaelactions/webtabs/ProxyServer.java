@@ -46,6 +46,14 @@ public final class ProxyServer implements AutoCloseable {
         return instance.getPort();
     }
     public static int port() { return instance == null ? 0 : instance.getPort(); }
+
+    /** 测试钩子：丢掉单例，便于每个 instrumentation 用例安装自己的 mock 上游。 */
+    static synchronized void resetForTests() {
+        if (instance != null) {
+            try { instance.close(); } catch (IOException ignored) { }
+            instance = null;
+        }
+    }
     public int getPort() { return listener.getLocalPort(); }
     private void accept() {
         while (running) {

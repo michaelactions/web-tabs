@@ -37,6 +37,7 @@ jobs:
           api-level: 30
           arch: x86_64
           target: google_apis
+          profile: '10.1in WXGA (Tablet)'
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash .github/emulator-tests.sh
@@ -49,15 +50,15 @@ jobs:
         run: |
           gradle assembleRelease --no-daemon --stacktrace
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk dist/WebTabs-v1.2.1.apk
-          "$ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner" verify --verbose --print-certs dist/WebTabs-v1.2.1.apk
-          "$ANDROID_SDK_ROOT/build-tools/34.0.0/aapt" dump badging dist/WebTabs-v1.2.1.apk
+          cp app/build/outputs/apk/release/app-release.apk dist/WebTabs-v1.2.2.apk
+          "$ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner" verify --verbose --print-certs dist/WebTabs-v1.2.2.apk
+          "$ANDROID_SDK_ROOT/build-tools/34.0.0/aapt" dump badging dist/WebTabs-v1.2.2.apk
       - name: Encrypt personal APK before artifact upload
         env:
           ARTIFACT_PASSWORD: ${{ secrets.WEBTABS_ARTIFACT_PASSWORD }}
         run: |
-          openssl enc -aes-256-cbc -salt -pbkdf2 -in dist/WebTabs-v1.2.1.apk -out dist/WebTabs-v1.2.1.apk.enc -pass env:ARTIFACT_PASSWORD
-          rm dist/WebTabs-v1.2.1.apk
+          openssl enc -aes-256-cbc -salt -pbkdf2 -in dist/WebTabs-v1.2.2.apk -out dist/WebTabs-v1.2.2.apk.enc -pass env:ARTIFACT_PASSWORD
+          rm dist/WebTabs-v1.2.2.apk
       - name: Upload encrypted APK (not a public Release asset)
         uses: actions/upload-artifact@v4
         with:

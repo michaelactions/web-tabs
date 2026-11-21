@@ -3,8 +3,13 @@ package com.michaelactions.webtabs;
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import org.json.JSONArray;
+import org.json.JSONTokener;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
@@ -29,10 +34,13 @@ public class WebTabsSmokeTest {
         final ServerSocket server;
         final AtomicInteger hits = new AtomicInteger();
         final String marker;
+        final String body;
         volatile boolean running = true;
         volatile Throwable error;
-        Mock(String marker) throws IOException {
+        Mock(String marker) throws IOException { this(marker, defaultBody(marker)); }
+        Mock(String marker, String body) throws IOException {
             this.marker = marker;
+            this.body = body;
             server = new ServerSocket(0, 16, InetAddress.getByName("127.0.0.1"));
             Thread t = new Thread(() -> { while (running) {
                 try (Socket c = server.accept()) {
@@ -40,14 +48,16 @@ public class WebTabsSmokeTest {
                     String h = head(c.getInputStream());
                     if (!h.contains("Proxy-Authorization: Basic test-" + marker)) throw new AssertionError("missing proxy auth " + marker);
                     hits.incrementAndGet();
-                    String body = "<!doctype html><html><head><title>" + marker + "</title><meta name='viewport' content='width=device-width'></head>"
-                        + "<body style='font-family:sans-serif;background:#f5f7fb;padding:32px'><h1>WebTabs</h1><h2>" + marker + "</h2><p>Authenticated proxy route verified</p></body></html>";
                     byte[] data = body.getBytes(StandardCharsets.UTF_8);
                     c.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " + data.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
                     c.getOutputStream().write(data); c.getOutputStream().flush();
                 } catch (Throwable e) { if (running) error = e; }
             }});
             t.setDaemon(true); t.start();
+        }
+        private static String defaultBody(String marker) {
+            return "<!doctype html><html><head><title>" + marker + "</title><meta name='viewport' content='width=device-width'></head>"
+                + "<body style='font-family:sans-serif;background:#f5f7fb;padding:32px'><h1>WebTabs</h1><h2>" + marker + "</h2><p>Authenticated proxy route verified</p></body></html>";
         }
         int port() { return server.getLocalPort(); }
         @Override public void close() throws IOException { running = false; server.close(); }
@@ -66,7 +76,71 @@ public class WebTabsSmokeTest {
         }
         return null;
     }
+
+    /** 1366x768 skin on a white body, same shape as AIDA64 RemoteSensor. */
+    private static final String AIDA_PAGE =
+        "<!doctype html><html><head><title>AIDA64</title><meta name='viewport' content='width=1366'>"
+        + "<style>html,body{margin:0;padding:0}"
+        + "body{background-color:#FFFFFF;background-repeat:no-repeat;background-attachment:fixed;background-position:center}"
+        + "#page0{position:relative;width:1366px;height:768px;background:#3B3B3B}"
+        + "</style></head><body><div id='page0'></div></body></html>";
+
+    private static final String PLAIN_PAGE =
+        "<!doctype html><html><head><title>Plain</title><meta name='viewport' content='width=device-width'>"
+        + "</head><body style='margin:0;background-color:#FFFFFF'><h1>Plain</h1></body></html>";
+
+    private WebView waitForTitle(Activity activity, String title) throws Exception {
+        long deadline = android.os.SystemClock.elapsedRealtime() + 25000;
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            final String[] current = new String[1];
+            getInstrumentation().runOnMainSync(() -> {
+                WebView w = activeWeb(activity);
+                current[0] = w == null || w.getTitle() == null ? "" : w.getTitle();
+            });
+            if (title.equals(current[0])) {
+                final WebView[] found = new WebView[1];
+                getInstrumentation().runOnMainSync(() -> found[0] = activeWeb(activity));
+                assertNotNull("no active WebView", found[0]);
+                return found[0];
+            }
+            Thread.sleep(200);
+        }
+        throw new AssertionError("page title never became " + title);
+    }
+
+    /** evaluateJavascript returns a JSON literal; unwrap the JSON string we ask the page to produce. */
+    private JSONArray evalArray(WebView view, String expression) throws Exception {
+        final String[] out = new String[1];
+        final CountDownLatch done = new CountDownLatch(1);
+        getInstrumentation().runOnMainSync(() -> view.evaluateJavascript("JSON.stringify(" + expression + ")",
+            value -> { out[0] = value; done.countDown(); }));
+        assertTrue("JS evaluation timed out", done.await(15, TimeUnit.SECONDS));
+        assertNotNull(out[0]);
+        Object unwrapped = new JSONTokener(out[0]).nextValue();
+        assertTrue("unexpected JS result " + out[0], unwrapped instanceof String);
+        return new JSONArray((String) unwrapped);
+    }
+
+    private String evalString(WebView view, String expression) throws Exception {
+        final String[] out = new String[1];
+        final CountDownLatch done = new CountDownLatch(1);
+        getInstrumentation().runOnMainSync(() -> view.evaluateJavascript(expression,
+            value -> { out[0] = value; done.countDown(); }));
+        assertTrue("JS evaluation timed out", done.await(15, TimeUnit.SECONDS));
+        return out[0];
+    }
+
+    private void assertChannelNear(String what, int actual, int expected, int tolerance) {
+        int r = Color.red(actual), g = Color.green(actual), b = Color.blue(actual);
+        assertTrue(what + " expected ~" + String.format("#%06X", expected & 0xFFFFFF)
+            + " but was " + String.format("#%06X", actual & 0xFFFFFF),
+            Math.abs(r - Color.red(expected)) <= tolerance
+            && Math.abs(g - Color.green(expected)) <= tolerance
+            && Math.abs(b - Color.blue(expected)) <= tolerance);
+    }
+
     @Test public void testAllProxyRoutesFullscreenAndKeepOn() throws Throwable {
+        ProxyServer.resetForTests();
         MainActivity main = (MainActivity)getInstrumentation().startActivitySync(new Intent(getInstrumentation().getTargetContext(), MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         try (Mock a = new Mock("Nanan-Telecom"); Mock b = new Mock("Nanan-Unicom"); Mock c = new Mock("Rongchang-Unicom")) {
             ProxyServer.start(new ProxyServer.Upstream[]{
@@ -133,6 +207,90 @@ public class WebTabsSmokeTest {
                     });
                 } finally { getInstrumentation().runOnMainSync(web::finish); }
             }
+        }
+    }
+
+    /**
+     * AIDA64 的固定 1366x768 皮肤按宽度缩放后，底部会露出 body 的白底。
+     * 断言：只对 10.0.1.10 把 html/body 背景刷深，皮肤尺寸/比例不变；
+     * 1280x800 平板截图底部确实是深色；导航到其它站点后白底和 WebView 底色恢复。
+     */
+    @Test public void testAidaLetterboxBackgroundAndScope() throws Throwable {
+        ProxyServer.resetForTests();
+        try (Mock aida = new Mock("AIDA64", AIDA_PAGE); Mock plain = new Mock("Plain", PLAIN_PAGE)) {
+            ProxyServer.start(new ProxyServer.Upstream[]{
+                new ProxyServer.Upstream("127.0.0.1", aida.port(), "Basic test-" + aida.marker),
+                new ProxyServer.Upstream("127.0.0.1", plain.port(), "Basic test-" + plain.marker),
+                null
+            });
+            MainActivity main = (MainActivity)getInstrumentation().startActivitySync(new Intent(getInstrumentation().getTargetContext(), MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            getInstrumentation().runOnMainSync(() -> {
+                Store.save(main, Arrays.asList(
+                    new Store.Site("AIDA64", "http://10.0.1.10/"),
+                    new Store.Site("普通站点", "http://10.0.2.1/")));
+                Store.prefs(main).edit().putBoolean("fullscreen", true).putBoolean("showBar", true).putBoolean("keepOn", true).commit();
+            });
+            Activity web = getInstrumentation().startActivitySync(
+                new Intent(main, WebActivity.class).putExtra("index", 0).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            try {
+                WebView view = waitForTitle(web, "AIDA64");
+
+                long deadline = android.os.SystemClock.elapsedRealtime() + 20000;
+                String marker = "";
+                while (android.os.SystemClock.elapsedRealtime() < deadline) {
+                    marker = evalString(view, "document.documentElement.getAttribute('data-webtabs-aida')");
+                    if ("\"1\"".equals(marker)) break;
+                    Thread.sleep(200);
+                }
+                assertEquals("\"1\"", marker);
+
+                JSONArray skin = evalArray(view,
+                    "(function(){var r=document.getElementById('page0').getBoundingClientRect();"
+                    + "return [getComputedStyle(document.body).backgroundColor,"
+                    + "getComputedStyle(document.documentElement).backgroundColor,"
+                    + "r.width,r.height,window.innerWidth,window.innerHeight,"
+                    + "document.documentElement.scrollWidth];})()");
+                assertEquals("AIDA body background must be dark", "rgb(27, 27, 27)", skin.getString(0));
+                assertEquals("AIDA html background must be dark", "rgb(27, 27, 27)", skin.getString(1));
+                assertEquals("skin width must not change", 1366.0, skin.getDouble(2), 0.5);
+                assertEquals("skin height must not change", 768.0, skin.getDouble(3), 0.5);
+                assertTrue("layout width must stay width-fit: " + skin.getDouble(4),
+                    skin.getDouble(4) >= 1280.0 && skin.getDouble(4) <= 1370.0);
+                assertTrue("letterbox viewport must be taller than the skin: " + skin.getDouble(5),
+                    skin.getDouble(5) > 768.0 + 20.0);
+                assertEquals("horizontal layout width must not change", 1366.0, skin.getDouble(6), 0.5);
+
+                Bitmap shot = getInstrumentation().getUiAutomation().takeScreenshot();
+                assertNotNull(shot);
+                assertEquals("regression must run on the 1280x800 tablet AVD", 1280, shot.getWidth());
+                assertEquals("regression must run on the 1280x800 tablet AVD", 800, shot.getHeight());
+                assertChannelNear("AIDA skin centre", shot.getPixel(shot.getWidth() / 2, 400), 0xFF3B3B3B, 4);
+                int darkRows = 0;
+                for (int y = 700; y < shot.getHeight(); y++) {
+                    int p = shot.getPixel(shot.getWidth() / 2, y);
+                    if (Math.abs(Color.red(p) - 27) <= 12 && Math.abs(Color.green(p) - 27) <= 12
+                            && Math.abs(Color.blue(p) - 27) <= 12) darkRows++;
+                }
+                assertTrue("AIDA letterbox must be repainted dark below the skin, dark rows=" + darkRows,
+                    darkRows >= 20);
+                try (FileOutputStream out = new FileOutputStream(new File(main.getFilesDir(), "aida-letterbox.png"))) {
+                    shot.compress(Bitmap.CompressFormat.PNG, 100, out);
+                }
+
+                getInstrumentation().runOnMainSync(() -> view.loadUrl("http://10.0.2.1/"));
+                waitForTitle(web, "Plain");
+                JSONArray plain = evalArray(view,
+                    "(function(){return [getComputedStyle(document.body).backgroundColor,"
+                    + "document.documentElement.getAttribute('data-webtabs-aida')];})()");
+                assertEquals("non-AIDA site must keep its white body", "rgb(255, 255, 255)", plain.getString(0));
+                assertTrue("non-AIDA site must not be marked as AIDA", plain.isNull(1));
+                final int[] nativeBg = new int[1];
+                getInstrumentation().runOnMainSync(() -> {
+                    Drawable d = view.getBackground();
+                    nativeBg[0] = d instanceof ColorDrawable ? ((ColorDrawable) d).getColor() : Color.TRANSPARENT;
+                });
+                assertEquals("WebView background must reset to white away from AIDA", Color.WHITE, nativeBg[0]);
+            } finally { getInstrumentation().runOnMainSync(web::finish); }
         }
     }
 }

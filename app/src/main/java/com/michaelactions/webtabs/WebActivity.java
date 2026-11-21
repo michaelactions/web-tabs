@@ -217,7 +217,14 @@ CookieManager.getInstance().setAcceptCookie(true);
 if (Store.prefs(this).getBoolean("desktopUA", false)) {
 s.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36");
 }
-w.setWebViewClient(new WebViewClient());
+w.setWebViewClient(new WebViewClient() {
+@Override public void onPageStarted(WebView view, String url, Bitmap favicon) {
+AidaSkin.started(view, url);
+}
+@Override public void onPageFinished(WebView view, String url) {
+AidaSkin.finished(view, url);
+}
+});
 w.setWebChromeClient(new WebChromeClient() {
 @Override public void onProgressChanged(WebView view, int p) {
 progress.setProgress(p);
