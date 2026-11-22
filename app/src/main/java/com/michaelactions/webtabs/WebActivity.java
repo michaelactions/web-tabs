@@ -245,6 +245,9 @@ catch (Exception e) { Toast.makeText(WebActivity.this, "无法打开下载链接
 }
 });
 w.setVisibility(View.GONE);
+w.addOnLayoutChangeListener((v, left, top, right, bottom, ol, ot, or, ob) -> {
+if ((bottom - top) != (ob - ot) || (right - left) != (or - ol)) AidaSkin.recenter(w);
+});
 return w;
 }
 

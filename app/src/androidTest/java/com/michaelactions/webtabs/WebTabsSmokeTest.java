@@ -161,6 +161,16 @@ public class WebTabsSmokeTest {
         return rows;
     }
 
+    /** 从屏幕最顶部往下数连续深色留边的行数（居中后上方应当也有一条）。 */
+    private static int darkTopRows(Bitmap shot, int x) {
+        int rows = 0;
+        for (int y = 0; y < shot.getHeight(); y++) {
+            if (!nearColor(shot.getPixel(x, y), 0xFF1B1B1B, 12)) break;
+            rows++;
+        }
+        return rows;
+    }
+
     /** 视觉状态回调 + 有界截图轮询，等 WebView 真正合成出皮肤和黑边（JS 就绪 != 已上屏）。 */
     private Bitmap awaitStableAidaPixels(WebView view) throws Exception {
         long deadline = android.os.SystemClock.elapsedRealtime() + 15000;
@@ -305,7 +315,7 @@ public class WebTabsSmokeTest {
                     + "return [getComputedStyle(document.body).backgroundColor,"
                     + "getComputedStyle(document.documentElement).backgroundColor,"
                     + "r.width,r.height,window.innerWidth,window.innerHeight,"
-                    + "document.documentElement.scrollWidth];})()");
+                    + "document.documentElement.scrollWidth,r.top];})()");
 
                 // 先等 WebView 真正把这一帧合成上屏，再存图/存诊断，最后才断言像素。
                 Bitmap shot = awaitStableAidaPixels(view);
@@ -320,6 +330,9 @@ public class WebTabsSmokeTest {
                     diag.write("skinCentre=" + String.format("#%06X", shot.getPixel(cx, 400) & 0xFFFFFF) + "\n");
                     diag.write("bottom=" + String.format("#%06X", shot.getPixel(cx, shot.getHeight() - 10) & 0xFFFFFF) + "\n");
                     diag.write("darkRowsBelow700=" + darkLetterboxRows(shot, cx, 700) + "\n");
+                    diag.write("darkRowsTop=" + darkTopRows(shot, cx) + "\n");
+                    diag.write("offset=" + evalString(view,
+                        "document.documentElement.getAttribute('data-webtabs-aida-offset')") + "\n");
                     diag.write("js=" + skin + "\n");
                 }
 
@@ -337,7 +350,16 @@ public class WebTabsSmokeTest {
                 assertChannelNear("AIDA skin centre", shot.getPixel(cx, 400), 0xFF3B3B3B, 4);
                 int darkRows = darkLetterboxRows(shot, cx, 700);
                 assertTrue("AIDA letterbox must be repainted dark below the skin, dark rows=" + darkRows,
-                    darkRows >= 20);
+                    darkRows >= 15);
+                double offset = Double.parseDouble(evalString(view,
+                    "document.documentElement.getAttribute('data-webtabs-aida-offset')").replace("\"", ""));
+                int topRows = darkTopRows(shot, cx);
+                assertEquals("skin must move down by the centring offset, rectTop=" + skin.getDouble(7),
+                    offset, skin.getDouble(7), 2.0);
+                assertTrue("AIDA must be vertically centred, offset=" + offset, offset > 5.0);
+                assertTrue("top letterbox must be visible, top rows=" + topRows, topRows >= 15);
+                assertEquals("top and bottom letterbox must be equally wide, top=" + topRows + " bottom=" + darkRows,
+                    topRows, darkRows, 2);
 
                 getInstrumentation().runOnMainSync(() -> view.loadUrl("http://10.0.2.1/"));
                 waitForTitle(web, "Plain");
